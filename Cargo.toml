@@ -1,0 +1,16 @@
+[package]
+name = "binrw"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+members = [".", "example"]
+
+[dependencies]
+async-trait = "0.1.89"
+bytemuck = "1.24.0"
+
+[dev-dependencies]
+tokio = { version = "1.46.1", features = ["full"] }
+tokio-test = "0.4.4"
+anyhow = "1.0.98"
