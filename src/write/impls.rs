@@ -10,7 +10,7 @@ macro_rules! binwrite_num_impl {
             impl BinWrite for $type_name {
                 type Args<'a> = ();
 
-                async fn write_options<W: Write + Seek>(
+                async fn write_options<W: Write + Seek + Send>(
                     &self,
                     writer: &mut W,
                     endian: Endian,
@@ -30,12 +30,12 @@ binwrite_num_impl!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, f32, f64);
 
 impl<T, const N: usize> BinWrite for [T; N]
 where
-    T: BinWrite + 'static,
+    T: BinWrite + Sync + 'static,
     for<'a> T::Args<'a>: Clone,
 {
     type Args<'a> = T::Args<'a>;
 
-    async fn write_options<W: Write + Seek>(
+    async fn write_options<W: Write + Seek + Send>(
         &self,
         writer: &mut W,
         endian: Endian,
@@ -55,12 +55,12 @@ where
 
 impl<T> BinWrite for [T]
 where
-    T: BinWrite,
+    T: BinWrite + Sync,
     for<'a> T::Args<'a>: Clone,
 {
     type Args<'a> = T::Args<'a>;
 
-    async fn write_options<W: Write + Seek>(
+    async fn write_options<W: Write + Seek + Send>(
         &self,
         writer: &mut W,
         endian: Endian,
@@ -76,12 +76,12 @@ where
 
 impl<T> BinWrite for Vec<T>
 where
-    T: BinWrite + 'static,
+    T: BinWrite + Sync + 'static,
     for<'a> T::Args<'a>: Clone,
 {
     type Args<'a> = T::Args<'a>;
 
-    async fn write_options<W: Write + Seek>(
+    async fn write_options<W: Write + Seek + Send>(
         &self,
         writer: &mut W,
         endian: Endian,
@@ -101,23 +101,27 @@ where
     }
 }
 
-impl<T: BinWrite + ?Sized> BinWrite for &T {
+impl<T: BinWrite + Sync + ?Sized> BinWrite for &T
+{
     type Args<'a> = T::Args<'a>;
 
-    async fn write_options<W: Write + Seek>(
+    fn write_options<W: Write + Seek + Send>(
         &self,
         writer: &mut W,
         endian: Endian,
         args: Self::Args<'_>,
-    ) -> BinResult<()> {
-        (**self).write_options(writer, endian, args).await
+    ) -> impl Future<Output = BinResult<()>> + Send {
+        async move {
+            (**self).write_options(writer, endian, args).await
+        }
     }
 }
 
-impl<T: BinWrite + ?Sized + 'static> BinWrite for Box<T> {
+impl<T: BinWrite + Sync + ?Sized + 'static> BinWrite for Box<T>
+{
     type Args<'a> = T::Args<'a>;
 
-    async fn write_options<W: Write + Seek>(
+    async fn write_options<W: Write + Seek + Send>(
         &self,
         writer: &mut W,
         endian: Endian,
@@ -133,10 +137,11 @@ impl<T: BinWrite + ?Sized + 'static> BinWrite for Box<T> {
     }
 }
 
-impl<T: BinWrite> BinWrite for Option<T> {
+impl<T: BinWrite + Sync> BinWrite for Option<T>
+{
     type Args<'a> = T::Args<'a>;
 
-    async fn write_options<W: Write + Seek>(
+    async fn write_options<W: Write + Seek + Send>(
         &self,
         writer: &mut W,
         endian: Endian,
@@ -152,7 +157,7 @@ impl<T: BinWrite> BinWrite for Option<T> {
 impl<T> BinWrite for PhantomData<T> {
     type Args<'a> = ();
 
-    async fn write_options<W: Write + Seek>(
+    async fn write_options<W: Write + Seek + Send>(
         &self,
         _: &mut W,
         _: Endian,
@@ -165,7 +170,7 @@ impl<T> BinWrite for PhantomData<T> {
 impl BinWrite for () {
     type Args<'a> = ();
 
-    async fn write_options<W: Write + Seek>(
+    async fn write_options<W: Write + Seek + Send>(
         &self,
         _: &mut W,
         _: Endian,
@@ -178,12 +183,12 @@ impl BinWrite for () {
 macro_rules! write_tuple_impl {
     ($type1:ident $(, $types:ident)*) => {
         #[allow(non_camel_case_types)]
-        impl<Args: Clone,
-            $type1: for<'a> BinWrite<Args<'a> = Args>, $($types: for<'a> BinWrite<Args<'a> = Args>),*
+        impl<Args: Clone + Send,
+            $type1: for<'a> BinWrite<Args<'a> = Args> + Sync, $($types: for<'a> BinWrite<Args<'a> = Args> + Sync),*
         > BinWrite for ($type1, $($types),*) {
             type Args<'a> = Args;
 
-            async fn write_options<W: Write + Seek>(
+            async fn write_options<W: Write + Seek + Send>(
                 &self,
                 writer: &mut W,
                 endian: Endian,
@@ -215,7 +220,7 @@ write_tuple_impl!(
 impl BinWrite for bool {
     type Args<'a> = ();
 
-    async fn write_options<W: Write + Seek>(
+    async fn write_options<W: Write + Seek + Send>(
         &self,
         writer: &mut W,
         _endian: Endian,

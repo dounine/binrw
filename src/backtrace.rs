@@ -1,17 +1,9 @@
 use super::{ContextExt, CustomError, Error};
 extern crate alloc;
 use alloc::borrow::Cow;
-#[cfg(not(feature = "std"))]
-use alloc::{boxed::Box, format, string::ToString, vec::Vec};
 use core::fmt::{self, Write};
 
-#[cfg(feature = "verbose-backtrace")]
-const BOLD_OPEN: &str = "\x1b[1m";
-#[cfg(feature = "verbose-backtrace")]
-const BOLD_CLOSE: &str = "\x1b[22m";
-#[cfg(not(feature = "verbose-backtrace"))]
 const BOLD_OPEN: &str = "";
-#[cfg(not(feature = "verbose-backtrace"))]
 const BOLD_CLOSE: &str = "";
 
 /// An error backtrace.
@@ -99,22 +91,7 @@ impl ContextExt for Backtrace {
 
 impl fmt::Display for Backtrace {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        if cfg!(feature = "verbose-backtrace") {
-            writeln!(
-                f,
-                "\n ╺━━━━━━━━━━━━━━━━━━━━┅ Backtrace ┅━━━━━━━━━━━━━━━━━━━━╸\n"
-            )?;
-        }
-
         self.fmt_no_bars(f)?;
-
-        if cfg!(feature = "verbose-backtrace") {
-            writeln!(
-                f,
-                "\n ╺━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸\n"
-            )?;
-        }
-
         Ok(())
     }
 }

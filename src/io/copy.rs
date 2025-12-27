@@ -3,8 +3,8 @@ use crate::io::write::Write;
 
 pub async fn copy<R: ?Sized, W: ?Sized>(reader: &mut R, writer: &mut W) -> std::io::Result<u64>
 where
-    R: Read,
-    W: Write,
+    R: Read + Send,
+    W: Write + Send,
 {
     let mut pos = 0;
     let mut buf = [0u8; 8192];

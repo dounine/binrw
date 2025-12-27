@@ -7,7 +7,7 @@ edition = "2024"
 members = [".", "example"]
 
 [dependencies]
-async-trait = "0.1.89"
+async-lock = "3.4.2"
 bytemuck = "1.24.0"
 
 [dev-dependencies]

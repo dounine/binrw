@@ -1,19 +1,25 @@
-use async_trait::async_trait;
 use std::io::Cursor;
 use std::io::SeekFrom;
 
 pub trait Seek {
-    async fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64>;
-    async fn rewind(&mut self) -> std::io::Result<()> {
-        self.seek(SeekFrom::Start(0)).await?;
-        Ok(())
+    fn seek(&mut self, pos: SeekFrom) -> impl Future<Output = std::io::Result<u64>> + Send;
+
+    fn seek_relative(&mut self, pos: i64) -> impl Future<Output = std::io::Result<()>> + Send
+    where
+        Self: Send,
+    {
+        async move {
+            self.seek(SeekFrom::Current(pos)).await?;
+            Ok(())
+        }
     }
-    async fn seek_relative(&mut self, pos: i64) -> std::io::Result<()> {
-        self.seek(SeekFrom::Current(pos)).await?;
-        Ok(())
-    }
-    async fn stream_position(&mut self) -> std::io::Result<u64> {
-        self.seek(SeekFrom::Current(0)).await
+    fn stream_position(&mut self) -> impl Future<Output = std::io::Result<u64>> + Send
+    where
+        Self: Send,
+    {
+        async {
+            self.seek(SeekFrom::Current(0)).await
+        }
     }
 }
 

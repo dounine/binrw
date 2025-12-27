@@ -1,38 +1,37 @@
 //! Type definitions for string readers.
 extern crate alloc;
-use crate::{
-    BinRead, BinResult, BinWrite, Endian,
-};
-#[cfg(not(feature = "std"))]
-use alloc::{string::String, vec, vec::Vec};
-use core::fmt::{self};
-use std::string::{FromUtf16Error, FromUtf8Error};
 use crate::io::read::Read;
 use crate::io::seek::Seek;
 use crate::io::write::Write;
+use crate::{BinRead, BinResult, BinWrite, Endian};
+use core::fmt::{self};
+use std::string::{FromUtf8Error, FromUtf16Error};
 
 #[derive(Clone, Eq, PartialEq, Default)]
 pub struct NullString(
-    /// The raw byte string.
     pub Vec<u8>,
 );
 
 impl BinRead for NullString {
     type Args<'a> = ();
 
-    async fn read_options<R: Read + Seek>(
+    fn read_options<R: Read + Seek + Send>(
         reader: &mut R,
         endian: Endian,
-        (): Self::Args<'_>,
-    ) -> BinResult<Self> {
-        let mut values = vec![];
-
-        loop {
-            let val = <u8>::read_options(reader, endian, ()).await?;
-            if val == 0 {
-                return Ok(Self(values));
+        _args: Self::Args<'_>,
+    ) -> impl Future<Output = BinResult<Self>> + Send
+    where
+        Self: Send,
+    {
+        async move {
+            let mut values = vec![];
+            loop {
+                let val = u8::read_options(reader, endian, ()).await?;
+                if val == 0 {
+                    return Ok(Self(values));
+                }
+                values.push(val);
             }
-            values.push(val);
         }
     }
 }
@@ -40,16 +39,20 @@ impl BinRead for NullString {
 impl BinWrite for NullString {
     type Args<'a> = ();
 
-    async fn write_options<W: Write + Seek>(
+    fn write_options<W: Write + Seek + Send>(
         &self,
         writer: &mut W,
-        endian: Endian,
-        args: Self::Args<'_>,
-    ) -> BinResult<()> {
-        self.0.write_options(writer, endian, args).await?;
-        0u8.write_options(writer, endian, args).await?;
-
-        Ok(())
+        _endian: Endian,
+        _args: Self::Args<'_>,
+    ) -> impl Future<Output = BinResult<()>> + Send
+    where
+        Self: Sync,
+    {
+        async {
+            writer.write_all(self.0.as_slice()).await?;
+            writer.write_all(&[0u8]).await?;
+            Ok(())
+        }
     }
 }
 
@@ -116,7 +119,7 @@ pub struct NullWideString(
 impl BinRead for NullWideString {
     type Args<'a> = ();
 
-    async fn read_options<R: Read + Seek>(
+    async fn read_options<R: Read + Seek + std::marker::Send>(
         reader: &mut R,
         endian: Endian,
         (): Self::Args<'_>,
@@ -136,14 +139,24 @@ impl BinRead for NullWideString {
 impl BinWrite for NullWideString {
     type Args<'a> = ();
 
-    async fn write_options<W: Write + Seek>(
+    async fn write_options<W: Write + Seek + std::marker::Send>(
         &self,
         writer: &mut W,
         endian: Endian,
-        args: Self::Args<'_>,
+        _: Self::Args<'_>,
     ) -> BinResult<()> {
-        self.0.write_options(writer, endian, args).await?;
-        0u16.write_options(writer, endian, args).await?;
+        for &val in &self.0 {
+            let bytes = match endian {
+                Endian::Big => val.to_be_bytes(),
+                Endian::Little => val.to_le_bytes(),
+            };
+            writer.write_all(&bytes).await?;
+        }
+        let null_bytes = match endian {
+            Endian::Big => 0u16.to_be_bytes(),
+            Endian::Little => 0u16.to_le_bytes(),
+        };
+        writer.write_all(&null_bytes).await?;
 
         Ok(())
     }

@@ -61,7 +61,7 @@ where
         + Clone
         + Copy
         + 'static,
-    R: Read + Seek,
+    R: Read + Seek + Send,
 {
     let pos = reader.stream_position().await?;
     let val = B::read_options(reader, endian, ()).await?;
@@ -149,7 +149,7 @@ where
     args
 }
 
-pub async fn restore_position<E: Into<Error>, S: Seek>(
+pub async fn restore_position<E: Into<Error>, S: Seek + Send>(
     stream: &mut S,
     pos: u64,
 ) -> impl FnOnce(E) -> Error + '_ {
@@ -176,7 +176,7 @@ fn restore_position_err(error: Error, mut seek_error: Error) -> Error {
     }
 }
 
-pub async fn restore_position_variant<S: Seek>(
+pub async fn restore_position_variant<S: Seek + Send>(
     stream: &mut S,
     pos: u64,
     error: Error,
@@ -239,7 +239,7 @@ use crate::io::write::Write;
 //     func
 // }
 //
-pub async fn write_zeroes<W: Write>(writer: &mut W, count: u64) -> BinResult<()> {
+pub async fn write_zeroes<W: Write + Send>(writer: &mut W, count: u64) -> BinResult<()> {
     const BUF_SIZE: u16 = 0x20;
     const ZEROES: [u8; BUF_SIZE as usize] = [0u8; BUF_SIZE as usize];
 
