@@ -55,33 +55,46 @@ impl Write for File {
         async { std::io::Write::flush(self) }
     }
 }
-// impl Write for Vec<u8> {
-//     fn write(&mut self, buf: &[u8]) -> impl Future<Output=std::io::Result<usize>> + Send {
-//         todo!()
-//     }
-//
-//     fn flush(&mut self) -> impl Future<Output=std::io::Result<()>> + Send {
-//         todo!()
-//     }
-//     // async fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-//     //     std::io::Write::write(self, buf)
-//     // }
-//     //
-//     // async fn flush(&mut self) -> std::io::Result<()> {
-//     //     Ok(())
-//     // }
-// }
+impl Write for [u8] {
+    fn write(&mut self, buf: &[u8]) -> impl Future<Output = std::io::Result<usize>> + Send {
+        async move {
+            self.copy_from_slice(buf);
+            Ok(buf.len())
+        }
+    }
+
+    fn flush(&mut self) -> impl Future<Output = std::io::Result<()>> + Send {
+        async { Ok(()) }
+    }
+}
+impl Write for Vec<u8> {
+    fn write(&mut self, buf: &[u8]) -> impl Future<Output = std::io::Result<usize>> + Send {
+        async move {
+            self.copy_from_slice(buf);
+            Ok(buf.len())
+        }
+    }
+
+    fn flush(&mut self) -> impl Future<Output = std::io::Result<()>> + Send {
+        async move { Ok(()) }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
     use anyhow::Result;
-    use std::io::Cursor;
+    use std::io::{Cursor, SeekFrom};
+    use tokio::io::AsyncSeekExt;
 
     #[tokio::test]
     async fn test_write_cursor() -> Result<()> {
-        let mut data = Cursor::new(Vec::new());
-        data.write_all(&[1, 2, 3]).await?;
-        assert_eq!(data.into_inner(), vec![1, 2, 3]);
+        let mut data = Cursor::new(vec![4, 5, 6]);
+        let mut buffer = vec![1, 2, 3];
+        crate::io::copy(&mut data, &mut buffer).await?;
+        assert_eq!(buffer, vec![4, 5, 6]);
+        data.seek(SeekFrom::Start(3)).await?;
+        crate::io::copy(&mut data, &mut buffer).await?;
+        assert_eq!(buffer, vec![4, 5, 6]);
         Ok(())
     }
 }

@@ -278,7 +278,7 @@ mod tests {
         }
     }
     use std::pin::Pin;
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc};
 
     pub type ReadBytesFun<'a> =
         dyn FnMut(u64) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + 'a;
@@ -312,7 +312,7 @@ mod tests {
                     b: "".to_string(),
                     data: Arc::new(async_lock::Mutex::new(data)),
                 };
-                Self::write_data(dir.data.clone()).await;
+                // Self::write_data(dir.data.clone()).await;
                 Ok(dir)
             }
         }
@@ -325,9 +325,31 @@ mod tests {
     // }
     impl<T> Dir<T>
     where
-        T: Read + Write + Seek + Send + StreamDefault,
+        T: Read + Write + Seek + Send + Default + StreamDefault,
         T::Config: Config + 'static,
     {
+        pub fn copy<'a>(&'a mut self)->Pin<Box<dyn Future<Output = ()> + Send + 'a>>{
+            Box::pin(async move {
+                let mut buffer = vec![0u8;10];
+                let mut data = self.data.lock().await;
+                // crate::io::copy(&mut *data, &mut buffer[..10]).await;
+                ()
+            })
+        }
+        // pub fn copy(&mut self) -> impl Future<Output = Dir<T>> + Send {
+        //     async move {
+        //         let mut buffer = vec![0u8; 10];
+        //         let mut d = self.data.lock().await;
+        //         d.read_exact(buffer.as_mut_slice()).await?;
+        //         let mut data = T::default();
+        //         Ok(Self {
+        //             _marker: PhantomData,
+        //             age: 0,
+        //             b: "".to_string(),
+        //             data: Arc::new(async_lock::Mutex::new(data)),
+        //         })
+        //     }
+        // }
         pub fn write_data(data: Arc<async_lock::Mutex<T>>) -> impl Future<Output = ()> + Send {
             async move {
                 let mut d = data.lock().await;

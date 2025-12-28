@@ -2,6 +2,16 @@ use std::cmp;
 use std::fs::File;
 
 pub trait Read {
+    fn read_byte(&mut self) -> impl Future<Output = std::io::Result<u8>> + Send
+    where
+        Self: Send,
+    {
+        async move {
+            let mut value = [0u8; 1];
+            Self::read_exact(self, &mut value).await?;
+            Ok(value[0])
+        }
+    }
     fn read(&mut self, buf: &mut [u8]) -> impl Future<Output = std::io::Result<usize>> + Send;
     fn flush(&mut self) -> impl Future<Output = std::io::Result<()>> + Send;
     fn read_exact(&mut self, buf: &mut [u8]) -> impl Future<Output = std::io::Result<()>> + Send
@@ -45,7 +55,7 @@ pub trait Read {
     }
 }
 
-pub trait ReadExt: Read {
+pub trait ReadExt {
     // 消耗 self 所有权的 take
     fn take(self, limit: u64) -> Take<Self>
     where
@@ -65,7 +75,26 @@ pub struct Take<R> {
     inner: R,
     limit: u64,
 }
-
+// impl Read for Take<Arc<async_lock::Mutex<Cursor<Vec<u8>>>>> {
+//     fn read(&mut self, buf: &mut [u8]) -> impl Future<Output=std::io::Result<usize>> + Send {
+//         async move {
+//             if self.limit == 0 {
+//                 return Ok(0);
+//             }
+//             let max = std::cmp::min(buf.len() as u64, self.limit) as usize;
+//             let mut inner = self.inner.lock().await;
+//             let n = inner.read(&mut buf[..max]).await?;
+//             self.limit -= n as u64;
+//             Ok(n)
+//         }
+//     }
+//
+//     fn flush(&mut self) -> impl Future<Output=std::io::Result<()>> + Send {
+//         async move{
+//             Ok(())
+//         }
+//     }
+// }
 impl<R: Read + Send> Read for Take<R> {
     async fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if self.limit == 0 {
@@ -82,7 +111,21 @@ impl<R: Read + Send> Read for Take<R> {
         self.inner.flush().await
     }
 }
+#[cfg(test)]
+mod take_tests {
+    use crate::io::read::ReadExt;
+    use std::io::Cursor;
 
+    #[tokio::test]
+    async fn test_take() {
+        let mut data: Cursor<Vec<u8>> = Cursor::new(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+        data.set_position(3);
+        let mut data = data.take(3);
+        let mut new_data = Cursor::new(Vec::new());
+        crate::io::copy(&mut data, &mut new_data).await.unwrap();
+        assert_eq!(new_data.into_inner(), vec![4, 5, 6]);
+    }
+}
 // 这里的关键是为 &mut R 实现 Read，这样 R 就可以被借用了
 impl<R: Read + ?Sized + Send> Read for &mut R {
     async fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
