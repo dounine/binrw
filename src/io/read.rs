@@ -195,7 +195,9 @@ pub trait ReadAt: Send + Sync {
 
 impl ReadAt for File {
     fn read_at(&self, buf: &mut [u8], offset: u64) -> std::io::Result<usize> {
-        std::os::unix::prelude::FileExt::read_at(self, buf, offset)
+        #[cfg(target_os = "linux")]
+        return std::os::unix::prelude::FileExt::read_at(self, buf, offset);
+        Ok(0)
     }
     fn size(&self) -> u64 {
         self.metadata().map(|m| m.len()).unwrap_or(0)
