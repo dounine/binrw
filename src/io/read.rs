@@ -188,3 +188,32 @@ impl Read for &[u8] {
         async { Ok(()) }
     }
 }
+pub trait ReadAt: Send + Sync {
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> std::io::Result<usize>;
+    fn size(&self) -> u64;
+}
+
+impl ReadAt for File {
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> std::io::Result<usize> {
+        std::os::unix::prelude::FileExt::read_at(self, buf, offset)
+    }
+    fn size(&self) -> u64 {
+        self.metadata().map(|m| m.len()).unwrap_or(0)
+    }
+}
+
+impl ReadAt for Vec<u8> {
+    fn read_at(&self, buf: &mut [u8], offset: u64) -> std::io::Result<usize> {
+        let offset = offset as usize;
+        if offset >= self.len() {
+            return Ok(0);
+        }
+        let end = std::cmp::min(offset + buf.len(), self.len());
+        let slice = &self[offset..end];
+        buf[..slice.len()].copy_from_slice(slice);
+        Ok(slice.len())
+    }
+    fn size(&self) -> u64 {
+        self.len() as u64
+    }
+}

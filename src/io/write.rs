@@ -81,7 +81,6 @@ impl Write for Vec<u8> {
 }
 #[cfg(test)]
 mod tests {
-    use super::*;
     use anyhow::Result;
     use std::io::{Cursor, SeekFrom};
     use tokio::io::AsyncSeekExt;
