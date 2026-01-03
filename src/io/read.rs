@@ -195,9 +195,28 @@ pub trait ReadAt: Send + Sync {
 
 impl ReadAt for File {
     fn read_at(&self, buf: &mut [u8], offset: u64) -> std::io::Result<usize> {
-        #[cfg(target_os = "linux")]
-        return std::os::unix::prelude::FileExt::read_at(self, buf, offset);
-        Ok(0)
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::FileExt;
+            FileExt::read_at(self, buf, offset)
+        }
+        #[cfg(target_os = "wasi")]
+        {
+            use std::os::wasi::fs::FileExt;
+            FileExt::read_at(self, buf, offset)
+        }
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::FileExt;
+            FileExt::seek_read(self, buf, offset)
+        }
+        #[cfg(not(any(unix, target_os = "wasi", windows)))]
+        {
+            Err(std::io::Error::new(
+                std::io::ErrorKind::Unsupported,
+                "read_at is not supported on this platform",
+            ))
+        }
     }
     fn size(&self) -> u64 {
         self.metadata().map(|m| m.len()).unwrap_or(0)
