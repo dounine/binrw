@@ -8,16 +8,14 @@ use crate::{BinResult, Endian};
 pub trait BinRead: Sized {
     type Args<'a>: Send;
 
-    #[inline]
     fn read<R: Read + Seek + Send>(reader: &mut R) -> impl Future<Output = BinResult<Self>> + Send
     where
         Self: Send,
         for<'a> Self::Args<'a>: Required,
     {
-        async move { Self::read_args(reader, Self::Args::args()).await }
+        Self::read_args(reader, Self::Args::args())
     }
 
-    #[inline]
     fn read_be<R: Read + Seek + Send>(
         reader: &mut R,
     ) -> impl Future<Output = BinResult<Self>> + Send
@@ -25,10 +23,9 @@ pub trait BinRead: Sized {
         Self: Send,
         for<'a> Self::Args<'a>: Required,
     {
-        async move { Self::read_be_args(reader, Self::Args::args()).await }
+        Self::read_be_args(reader, Self::Args::args())
     }
 
-    #[inline]
     fn read_le<R: Read + Seek + Send>(
         reader: &mut R,
     ) -> impl Future<Output = BinResult<Self>> + Send
@@ -36,10 +33,9 @@ pub trait BinRead: Sized {
         Self: Send,
         for<'a> Self::Args<'a>: Required,
     {
-        async move { Self::read_le_args(reader, Self::Args::args()).await }
+        Self::read_le_args(reader, Self::Args::args())
     }
 
-    #[inline]
     fn read_ne<R: Read + Seek + Send>(
         reader: &mut R,
     ) -> impl Future<Output = BinResult<Self>> + Send
@@ -47,10 +43,9 @@ pub trait BinRead: Sized {
         Self: Send,
         for<'a> Self::Args<'a>: Required,
     {
-        async move { Self::read_ne_args(reader, Self::Args::args()).await }
+        Self::read_ne_args(reader, Self::Args::args())
     }
 
-    #[inline]
     fn read_args<R: Read + Seek + Send>(
         reader: &mut R,
         args: Self::Args<'_>,
@@ -58,10 +53,9 @@ pub trait BinRead: Sized {
     where
         Self: Send,
     {
-        async move { Self::read_options(reader, Endian::Little, args).await }
+        Self::read_options(reader, Endian::Little, args)
     }
 
-    #[inline]
     fn read_be_args<R: Read + Seek + Send>(
         reader: &mut R,
         args: Self::Args<'_>,
@@ -69,10 +63,9 @@ pub trait BinRead: Sized {
     where
         Self: Send,
     {
-        async move { Self::read_options(reader, Endian::Big, args).await }
+        Self::read_options(reader, Endian::Big, args)
     }
 
-    #[inline]
     fn read_le_args<R: Read + Seek + Send>(
         reader: &mut R,
         args: Self::Args<'_>,
@@ -80,10 +73,9 @@ pub trait BinRead: Sized {
     where
         Self: Send,
     {
-        async move { Self::read_options(reader, Endian::Little, args).await }
+        Self::read_options(reader, Endian::Little, args)
     }
 
-    #[inline]
     fn read_ne_args<R: Read + Seek + Send>(
         reader: &mut R,
         args: Self::Args<'_>,
@@ -91,7 +83,7 @@ pub trait BinRead: Sized {
     where
         Self: Send,
     {
-        async move { Self::read_options(reader, Endian::NATIVE, args).await }
+        Self::read_options(reader, Endian::NATIVE, args)
     }
 
     fn read_options<R: Read + Seek + Send>(
@@ -104,43 +96,38 @@ pub trait BinRead: Sized {
 }
 
 pub trait BinReaderExt: Read + Seek + Sized + Send {
-    #[inline]
     fn read_type<'a, T>(&mut self, endian: Endian) -> impl Future<Output = BinResult<T>> + Send
     where
         T: BinRead + Send,
         T::Args<'a>: Required,
     {
-        async move { self.read_type_args(endian, T::Args::args()).await }
+        self.read_type_args(endian, T::Args::args())
     }
 
-    #[inline]
     fn read_be<'a, T>(&mut self) -> impl Future<Output = BinResult<T>> + Send
     where
         T: BinRead + Send,
         T::Args<'a>: Required,
     {
-        async move { self.read_type(Endian::Big).await }
+        self.read_type(Endian::Big)
     }
 
-    #[inline]
     fn read_le<'a, T>(&mut self) -> impl Future<Output = BinResult<T>> + Send
     where
         T: BinRead + Send,
         T::Args<'a>: Required,
     {
-        async move { self.read_type(Endian::Little).await }
+        self.read_type(Endian::Little)
     }
 
-    #[inline]
     fn read_ne<'a, T>(&mut self) -> impl Future<Output = BinResult<T>> + Send
     where
         T: BinRead + Send,
         T::Args<'a>: Required,
     {
-        async move { self.read_type(Endian::NATIVE).await }
+        self.read_type(Endian::NATIVE)
     }
 
-    #[inline]
     fn read_type_args<T>(
         &mut self,
         endian: Endian,
@@ -149,31 +136,28 @@ pub trait BinReaderExt: Read + Seek + Sized + Send {
     where
         T: BinRead + Send,
     {
-        async move { T::read_options(self, endian, args).await }
+        T::read_options(self, endian, args)
     }
 
-    #[inline]
     fn read_be_args<T>(&mut self, args: T::Args<'_>) -> impl Future<Output = BinResult<T>> + Send
     where
         T: BinRead + Send,
     {
-        async move { self.read_type_args(Endian::Big, args).await }
+        self.read_type_args(Endian::Big, args)
     }
 
-    #[inline]
     fn read_le_args<T>(&mut self, args: T::Args<'_>) -> impl Future<Output = BinResult<T>> + Send
     where
         T: BinRead + Send,
     {
-        async move { self.read_type_args(Endian::Little, args).await }
+        self.read_type_args(Endian::Little, args)
     }
 
-    #[inline]
     fn read_ne_args<T>(&mut self, args: T::Args<'_>) -> impl Future<Output = BinResult<T>> + Send
     where
         T: BinRead + Send,
     {
-        async move { self.read_type_args(Endian::NATIVE, args).await }
+        self.read_type_args(Endian::NATIVE, args)
     }
 }
 

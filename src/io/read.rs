@@ -184,6 +184,7 @@ impl Read for &[u8] {
         }
     }
 
+    #[inline]
     fn flush(&mut self) -> impl Future<Output = std::io::Result<()>> + Send {
         async { Ok(()) }
     }
