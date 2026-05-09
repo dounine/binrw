@@ -147,7 +147,14 @@ impl<T: BinRead + Send> BinRead for Option<T> {
         endian: Endian,
         args: Self::Args<'_>,
     ) -> impl Future<Output = BinResult<Self>> + Send {
-        async move { Ok(Some(T::read_options(reader, endian, args).await?)) }
+        async move {
+            let exit: bool = reader.read_type(endian).await?;
+            if exit {
+                Ok(Some(T::read_options(reader, endian, args).await?))
+            } else {
+                Ok(None)
+            }
+        }
     }
 }
 
@@ -278,7 +285,7 @@ mod tests {
         }
     }
     use std::pin::Pin;
-    use std::sync::{Arc};
+    use std::sync::Arc;
 
     pub type ReadBytesFun<'a> =
         dyn FnMut(u64) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + 'a;
@@ -328,9 +335,9 @@ mod tests {
         T: Read + Write + Seek + Send + Default + StreamDefault,
         T::Config: Config + 'static,
     {
-        pub fn copy<'a>(&'a mut self)->Pin<Box<dyn Future<Output = ()> + Send + 'a>>{
+        pub fn copy<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
             Box::pin(async move {
-                let mut buffer = vec![0u8;10];
+                let mut buffer = vec![0u8; 10];
                 let mut data = self.data.lock().await;
                 // crate::io::copy(&mut *data, &mut buffer[..10]).await;
                 ()

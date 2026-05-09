@@ -1,6 +1,6 @@
 use std::any::Any;
 use std::marker::PhantomData;
-use crate::{BinResult, BinWrite, Endian};
+use crate::{BinResult, BinWrite, BinWriterExt, Endian};
 use crate::io::seek::Seek;
 use crate::io::write::Write;
 
@@ -148,8 +148,14 @@ impl<T: BinWrite + Sync> BinWrite for Option<T>
         args: Self::Args<'_>,
     ) -> BinResult<()> {
         match self {
-            Some(inner) => inner.write_options(writer, endian, args).await,
-            None => Ok(()),
+            Some(inner) => {
+                writer.write_type(&true, endian).await?;
+                inner.write_options(writer, endian, args).await
+            },
+            None => {
+                writer.write_type(&false, endian).await?;
+                Ok(())
+            },
         }
     }
 }
