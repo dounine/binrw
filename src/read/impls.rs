@@ -61,12 +61,53 @@ read_tuple_impl!(
     b1, b2, b3, b4, b5, b6, b7, b8, b9, b10, b11, b12, b13, b14, b15, b16, b17, b18, b19, b20, b21,
     b22, b23, b24, b25, b26, b27, b28, b29, b30, b31, b32
 );
+impl BinRead for String {
+    type Args<'a> = ();
+
+    fn read_options<R: Read + Seek + Send>(
+        reader: &mut R,
+        endian: Endian,
+        _args: Self::Args<'_>,
+    ) -> impl Future<Output = BinResult<Self>> + Send
+    where
+        Self: Send,
+    {
+        async move {
+            let count: u64 = reader.read_type(endian).await?;
+            let bytes: Vec<u8> = reader.read_type_args(endian, count).await?;
+            Ok(String::from_utf8_lossy(bytes.as_slice()).to_string())
+        }
+    }
+}
+// impl BinRead for Option<String> {
+//     type Args<'a> = ();
+//
+//     fn read_options<R: Read + Seek + Send>(
+//         reader: &mut R,
+//         endian: Endian,
+//         args: Self::Args<'_>,
+//     ) -> impl Future<Output = BinResult<Self>> + Send
+//     where
+//         Self: Send,
+//     {
+//         async move {
+//             let exit: bool = reader.read_type(endian).await?;
+//             if exit {
+//                 let count: u64 = reader.read_type(endian).await?;
+//                 let bytes: Vec<u8> = reader.read_type_args(endian, count).await?;
+//                 Ok(Some(String::from_utf8_lossy(bytes.as_slice()).to_string()))
+//             } else {
+//                 Ok(None)
+//             }
+//         }
+//     }
+// }
 impl<B> BinRead for Vec<B>
 where
     B: BinRead + Send + 'static,
     for<'a> B::Args<'a>: Clone + Default,
 {
-    type Args<'a> = usize;
+    type Args<'a> = u64;
 
     fn read_options<R: Read + Seek + Send>(
         reader: &mut R,
@@ -74,7 +115,7 @@ where
         args: Self::Args<'_>,
     ) -> impl Future<Output = BinResult<Self>> + Send {
         async move {
-            let count = args;
+            let count = args as usize;
             if core::any::TypeId::of::<B>() == core::any::TypeId::of::<u8>() {
                 let mut list = vec![0u8; count];
                 reader
