@@ -74,7 +74,7 @@ impl BinRead for String {
     {
         async move {
             let count: u64 = reader.read_type(endian).await?;
-            let bytes: Vec<u8> = reader.read_type_args(endian, count).await?;
+            let bytes: Vec<u8> = reader.read_type_args(endian, (count, ())).await?;
             Ok(String::from_utf8_lossy(bytes.as_slice()).to_string())
         }
     }
@@ -107,7 +107,7 @@ where
     B: BinRead + Send + 'static,
     for<'a> B::Args<'a>: Clone + Default,
 {
-    type Args<'a> = u64;
+    type Args<'a> = (u64, B::Args<'a>);
 
     fn read_options<R: Read + Seek + Send>(
         reader: &mut R,
@@ -115,7 +115,8 @@ where
         args: Self::Args<'_>,
     ) -> impl Future<Output = BinResult<Self>> + Send {
         async move {
-            let count = args as usize;
+            let (count, b_args) = args;
+            let count = count as usize;
             if core::any::TypeId::of::<B>() == core::any::TypeId::of::<u8>() {
                 let mut list = vec![0u8; count];
                 reader
@@ -125,7 +126,6 @@ where
                 return Ok(unsafe { core::mem::transmute(list) });
             }
             let mut list = Vec::with_capacity(count);
-            let b_args = B::Args::default();
             for _ in 0..count {
                 list.push(B::read_options(reader, endian, b_args.clone()).await?);
             }
