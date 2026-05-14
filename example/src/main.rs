@@ -4,6 +4,9 @@ use std::io::{Cursor, SeekFrom};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let list = b"";
+    dbg!(list);
+    // println!("{}",list);
     let mut data = Cursor::new(vec![1,2,3,4]);
     // data.write_le(&1_u32).await?;
     // data.seek(SeekFrom::Start(0)).await?;
