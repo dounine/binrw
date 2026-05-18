@@ -2,192 +2,220 @@ mod impls;
 
 use crate::io::seek::Seek;
 use crate::io::write::Write;
-use crate::{BinResult, Endian, Required};
+use crate::{BinResult, Endian};
 
 pub trait BinWrite {
-    type Args<'a>: Send;
-
-    fn write<W: Write + Seek + Send>(
-        &self,
-        writer: &mut W,
-    ) -> impl std::future::Future<Output = BinResult<()>> + Send
+    type Args<'a>: Send
     where
-        Self: Sync,
-        for<'a> Self::Args<'a>: Required,
+        Self: 'a;
+
+    fn write<'a, 'w, W>(
+        &'a self,
+        writer: &'w mut W,
+    ) -> impl Future<Output = BinResult<()>> + Send + 'w
+    where
+        'a: 'w,
+        W: Write + Seek + Send,
+        Self: Sync + 'a,
+        Self::Args<'a>: std::default::Default,
     {
-        self.write_args(writer, Self::Args::args())
+        self.write_args(writer, Self::Args::default())
     }
 
-    fn write_be<W: Write + Seek + Send>(
-        &self,
-        writer: &mut W,
-    ) -> impl std::future::Future<Output = BinResult<()>> + Send
+    fn write_be<'a, 'w, W>(
+        &'a self,
+        writer: &'w mut W,
+    ) -> impl Future<Output = BinResult<()>> + Send + 'w
     where
-        Self: Sync,
-        for<'a> Self::Args<'a>: Required,
+        'a: 'w,
+        W: Write + Seek + Send,
+        Self: Sync + 'a,
+        Self::Args<'a>: std::default::Default,
     {
-        self.write_be_args(writer, Self::Args::args())
+        self.write_be_args(writer, Self::Args::default())
     }
 
-    fn write_le<W: Write + Seek + Send>(
-        &self,
-        writer: &mut W,
-    ) -> impl std::future::Future<Output = BinResult<()>> + Send
+    fn write_le<'a, 'w, W>(
+        &'a self,
+        writer: &'w mut W,
+    ) -> impl Future<Output = BinResult<()>> + Send + 'w
     where
-        Self: Sync,
-        for<'a> Self::Args<'a>: Required,
+        'a: 'w,
+        W: Write + Seek + Send,
+        Self: Sync + 'a,
+        Self::Args<'a>: std::default::Default,
     {
-        self.write_le_args(writer, Self::Args::args())
+        self.write_le_args(writer, Self::Args::default())
     }
 
-    fn write_ne<W: Write + Seek + Send>(
-        &self,
-        writer: &mut W,
-    ) -> impl std::future::Future<Output = BinResult<()>> + Send
+    fn write_ne<'a, 'w, W>(
+        &'a self,
+        writer: &'w mut W,
+    ) -> impl Future<Output = BinResult<()>> + Send + 'w
     where
-        Self: Sync,
-        for<'a> Self::Args<'a>: Required,
+        'a: 'w,
+        W: Write + Seek + Send,
+        Self: Sync + 'a,
+        Self::Args<'a>: std::default::Default,
     {
-        self.write_ne_args(writer, Self::Args::args())
+        self.write_ne_args(writer, Self::Args::default())
     }
 
-    fn write_args<W: Write + Seek + Send>(
-        &self,
-        writer: &mut W,
-        args: Self::Args<'_>,
-    ) -> impl std::future::Future<Output = BinResult<()>> + Send
+    fn write_args<'a, 'w, W>(
+        &'a self,
+        writer: &'w mut W,
+        args: Self::Args<'a>,
+    ) -> impl std::future::Future<Output = BinResult<()>> + Send + 'w
     where
-        Self: Sync,
+        'a: 'w,
+        W: Write + Seek + Send,
+        Self: Sync + 'a,
     {
         self.write_options(writer, Endian::Little, args)
     }
 
-    fn write_be_args<W: Write + Seek + Send>(
-        &self,
-        writer: &mut W,
-        args: Self::Args<'_>,
-    ) -> impl std::future::Future<Output = BinResult<()>> + Send
+    fn write_be_args<'a, 'w, W>(
+        &'a self,
+        writer: &'w mut W,
+        args: Self::Args<'a>,
+    ) -> impl Future<Output = BinResult<()>> + Send + 'w
     where
-        Self: Sync,
+        'a: 'w,
+        W: Write + Seek + Send,
+        Self: Sync + 'a,
     {
         self.write_options(writer, Endian::Big, args)
     }
 
-    fn write_le_args<W: Write + Seek + Send>(
-        &self,
-        writer: &mut W,
-        args: Self::Args<'_>,
-    ) -> impl std::future::Future<Output = BinResult<()>> + Send
+    fn write_le_args<'a, 'w, W>(
+        &'a self,
+        writer: &'w mut W,
+        args: Self::Args<'a>,
+    ) -> impl Future<Output = BinResult<()>> + Send + 'w
     where
-        Self: Sync,
+        'a: 'w,
+        W: Write + Seek + Send,
+        Self: Sync + 'a,
     {
         self.write_options(writer, Endian::Little, args)
     }
 
-    fn write_ne_args<W: Write + Seek + Send>(
-        &self,
-        writer: &mut W,
-        args: Self::Args<'_>,
-    ) -> impl std::future::Future<Output = BinResult<()>> + Send
+    fn write_ne_args<'a, 'w, W>(
+        &'a self,
+        writer: &'w mut W,
+        args: Self::Args<'a>,
+    ) -> impl Future<Output = BinResult<()>> + Send + 'w
     where
-        Self: Sync,
+        'a: 'w,
+        W: Write + Seek + Send,
+        Self: Sync + 'a,
     {
         self.write_options(writer, Endian::NATIVE, args)
     }
 
-    fn write_options<W: Write + Seek + Send>(
-        &self,
-        writer: &mut W,
+    fn write_options<'a, 'w, W>(
+        &'a self,
+        writer: &'w mut W,
         endian: Endian,
-        args: Self::Args<'_>,
-    ) -> impl std::future::Future<Output = BinResult<()>> + Send
+        args: Self::Args<'a>,
+    ) -> impl Future<Output = BinResult<()>> + Send + 'w
     where
-        Self: Sync;
+        'a: 'w,
+        W: Write + Seek + Send,
+        Self: Sync + 'a;
 }
 
 pub trait BinWriterExt: Write + Seek + Sized + Send {
-    fn write_type<T: BinWrite + Sync>(
-        &mut self,
-        value: &T,
+    fn write_type<'a, 'v, T>(
+        &'a mut self,
+        value: &'v T,
         endian: Endian,
-    ) -> impl std::future::Future<Output = BinResult<()>> + Send
+    ) -> impl Future<Output = BinResult<()>> + Send + 'a
     where
-        for<'a> T::Args<'a>: Required + Send,
+        'v: 'a,
+        T: BinWrite + Sync,
+        for<'b> T::Args<'b>: std::default::Default + Send,
     {
-        self.write_type_args(value, endian, T::Args::args())
+        self.write_type_args(value, endian, T::Args::default())
     }
 
-    fn write_be<T: BinWrite + Sync>(
-        &mut self,
-        value: &T,
-    ) -> impl std::future::Future<Output = BinResult<()>> + Send
+    fn write_be<'a, 't, T>(
+        &'a mut self,
+        value: &'t T,
+    ) -> impl Future<Output = BinResult<()>> + Send + 'a
     where
-        for<'a> T::Args<'a>: Required + Send,
+        't: 'a,
+        T: BinWrite + Sync,
+        for<'b> T::Args<'b>: std::default::Default + Send,
     {
         self.write_type(value, Endian::Big)
     }
-
-    fn write_le<T: BinWrite + Sync>(
-        &mut self,
-        value: &T,
-    ) -> impl std::future::Future<Output = BinResult<()>> + Send
+    fn write_le<'a, 'v, T>(
+        &'a mut self,
+        value: &'v T,
+    ) -> impl Future<Output = BinResult<()>> + Send + 'a
     where
-        for<'a> T::Args<'a>: Required + Send,
+        'v: 'a,
+        T: BinWrite + Sync,
+        for<'b> T::Args<'b>: std::default::Default + Send,
     {
         self.write_type(value, Endian::Little)
     }
 
-    fn write_ne<T: BinWrite + Sync>(
-        &mut self,
-        value: &T,
-    ) -> impl std::future::Future<Output = BinResult<()>> + Send
+    fn write_ne<'a, 'v, T>(
+        &'a mut self,
+        value: &'v T,
+    ) -> impl Future<Output = BinResult<()>> + Send + 'a
     where
-        for<'a> T::Args<'a>: Required + Send,
+        'v: 'a,
+        T: BinWrite + Sync,
+        for<'b> T::Args<'b>: std::default::Default + Send,
     {
         self.write_type(value, Endian::NATIVE)
     }
 
-    fn write_type_args<T: BinWrite + Sync>(
-        &mut self,
-        value: &T,
+    fn write_type_args<'a, 'v, T>(
+        &'a mut self,
+        value: &'v T,
         endian: Endian,
-        args: T::Args<'_>,
-    ) -> impl std::future::Future<Output = BinResult<()>> + Send
+        args: T::Args<'a>,
+    ) -> impl Future<Output = BinResult<()>> + Send + 'a
     where
-        for<'a> T::Args<'a>: Send,
+        'v: 'a,
+        T: BinWrite + Sync,
     {
         T::write_options(value, self, endian, args)
     }
-
-    fn write_be_args<T: BinWrite + Sync>(
-        &mut self,
-        value: &T,
-        args: T::Args<'_>,
-    ) -> impl std::future::Future<Output = BinResult<()>> + Send
+    fn write_be_args<'a, 'v, T>(
+        &'a mut self,
+        value: &'v T,
+        args: T::Args<'a>,
+    ) -> impl Future<Output = BinResult<()>> + Send + 'a
     where
-        for<'a> T::Args<'a>: Send,
+        'v: 'a,
+        T: BinWrite + Sync,
     {
         self.write_type_args(value, Endian::Big, args)
     }
-
-    fn write_le_args<T: BinWrite + Sync>(
-        &mut self,
-        value: &T,
-        args: T::Args<'_>,
-    ) -> impl std::future::Future<Output = BinResult<()>> + Send
+    fn write_le_args<'a, 'v, T>(
+        &'a mut self,
+        value: &'v T,
+        args: T::Args<'a>,
+    ) -> impl Future<Output = BinResult<()>> + Send + 'a
     where
-        for<'a> T::Args<'a>: Send,
+        'v: 'a,
+        T: BinWrite + Sync,
     {
         self.write_type_args(value, Endian::Little, args)
     }
-
-    fn write_ne_args<T: BinWrite + Sync>(
-        &mut self,
-        value: &T,
-        args: T::Args<'_>,
-    ) -> impl std::future::Future<Output = BinResult<()>> + Send
+    fn write_ne_args<'a, 'v, T>(
+        &'a mut self,
+        value: &'v T,
+        args: T::Args<'a>,
+    ) -> impl Future<Output = BinResult<()>> + Send + 'a
     where
-        for<'a> T::Args<'a>: Send,
+        'v: 'a,
+        T: BinWrite + Sync,
     {
         self.write_type_args(value, Endian::NATIVE, args)
     }

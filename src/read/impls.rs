@@ -9,7 +9,12 @@ macro_rules! read_impl {
             impl crate::BinRead for $type_name {
                 type Args<'a> = ();
 
-                fn read_options<R: Read + Seek + Send>(reader: &mut R, endian: Endian, (): Self::Args<'_>) -> impl Future<Output = BinResult<Self>> + Send {
+                fn read_options<'a,'r, R>(reader: &'r mut R, endian: Endian, (): Self::Args<'a>) -> impl Future<Output = BinResult<Self>> + Send + 'r
+                    where
+                    'a: 'r,
+                    R:  Read + Seek + Send,
+                    Self: Send + 'a,
+                {
                     async move {
                         let mut val = [0; core::mem::size_of::<$type_name>()];
                         let pos = reader.stream_position().await?;
@@ -36,15 +41,31 @@ read_impl!(u8, u16, u32, u64, u128, i8, i16, i32, i64, i128, f32, f64);
 macro_rules! read_tuple_impl {
     ($type1:ident $(, $types:ident)*) => {
         #[allow(non_camel_case_types)]
-        impl<Args: Clone + Send, $type1: for<'a> BinRead<Args<'a> = Args> + Send, $($types: for<'a> BinRead<Args<'a> = Args> + Send),*> BinRead for ($type1, $($types),*) {
-            type Args<'a> = Args;
+        impl<$type1, $($types),*> BinRead for ($type1, $($types,)*)
+        where
+            $type1: BinRead + Send,
+            $($types: BinRead + Send),*
+        {
+            type Args<'a> = ($type1::Args<'a>, $($types::Args<'a>,)*)
+            where
+                $type1: 'a,
+                $($types: 'a),*;
 
-            fn read_options<R: Read + Seek + Send>(reader: &mut R, endian: Endian, args: Self::Args<'_>) -> impl Future<Output = BinResult<Self>> + Send {
+            fn read_options<'a, 'r, R>(
+                reader: &'r mut R,
+                endian: Endian,
+                ($type1, $($types,)*): Self::Args<'a>,
+            ) -> impl Future<Output = BinResult<Self>> + Send + 'r
+            where
+                'a: 'r,
+                R: Read + Seek + Send,
+                Self: Send + 'a,
+            {
                 async move {
                     Ok((
-                        $type1::read_options(reader, endian, args.clone()).await?,
+                        $type1::read_options(reader, endian, $type1).await?,
                         $(
-                            <$types>::read_options(reader, endian, args.clone()).await?
+                            $types::read_options(reader, endian, $types).await?
                         ),*
                     ))
                 }
@@ -64,13 +85,15 @@ read_tuple_impl!(
 impl BinRead for String {
     type Args<'a> = ();
 
-    fn read_options<R: Read + Seek + Send>(
-        reader: &mut R,
+    fn read_options<'a, 'r, R>(
+        reader: &'r mut R,
         endian: Endian,
-        _args: Self::Args<'_>,
-    ) -> impl Future<Output = BinResult<Self>> + Send
+        _args: Self::Args<'a>,
+    ) -> impl Future<Output = BinResult<Self>> + Send + 'r
     where
-        Self: Send,
+        'a: 'r,
+        R: Read + Seek + Send,
+        Self: Send + 'a,
     {
         async move {
             let count: u64 = reader.read_type(endian).await?;
@@ -79,29 +102,6 @@ impl BinRead for String {
         }
     }
 }
-// impl BinRead for Option<String> {
-//     type Args<'a> = ();
-//
-//     fn read_options<R: Read + Seek + Send>(
-//         reader: &mut R,
-//         endian: Endian,
-//         args: Self::Args<'_>,
-//     ) -> impl Future<Output = BinResult<Self>> + Send
-//     where
-//         Self: Send,
-//     {
-//         async move {
-//             let exit: bool = reader.read_type(endian).await?;
-//             if exit {
-//                 let count: u64 = reader.read_type(endian).await?;
-//                 let bytes: Vec<u8> = reader.read_type_args(endian, count).await?;
-//                 Ok(Some(String::from_utf8_lossy(bytes.as_slice()).to_string()))
-//             } else {
-//                 Ok(None)
-//             }
-//         }
-//     }
-// }
 impl<B> BinRead for Vec<B>
 where
     B: BinRead + Send + 'static,
@@ -109,11 +109,16 @@ where
 {
     type Args<'a> = (u64, B::Args<'a>);
 
-    fn read_options<R: Read + Seek + Send>(
-        reader: &mut R,
+    fn read_options<'a, 'r, R>(
+        reader: &'r mut R,
         endian: Endian,
-        args: Self::Args<'_>,
-    ) -> impl Future<Output = BinResult<Self>> + Send {
+        args: Self::Args<'a>,
+    ) -> impl Future<Output = BinResult<Self>> + Send + 'r
+    where
+        'a: 'r,
+        R: Read + Seek + Send,
+        Self: 'a,
+    {
         async move {
             let (count, b_args) = args;
             let count = count as usize;
@@ -139,13 +144,21 @@ where
     B: BinRead + Send,
     for<'a> B::Args<'a>: Clone,
 {
-    type Args<'a> = B::Args<'a>;
+    type Args<'a>
+        = B::Args<'a>
+    where
+        B: 'a;
 
-    fn read_options<R: Read + Seek + Send>(
-        reader: &mut R,
+    fn read_options<'a, 'r, R>(
+        reader: &'r mut R,
         endian: Endian,
-        args: Self::Args<'_>,
-    ) -> impl Future<Output = BinResult<Self>> + Send {
+        args: Self::Args<'a>,
+    ) -> impl Future<Output = BinResult<Self>> + Send + 'r
+    where
+        'a: 'r,
+        R: Read + Seek + Send,
+        Self: 'a,
+    {
         async move {
             let mut list = Vec::with_capacity(N);
             for _ in 0..N {
@@ -159,35 +172,56 @@ where
 impl BinRead for () {
     type Args<'a> = ();
 
-    fn read_options<R: Read + Seek + Send>(
-        _: &mut R,
+    fn read_options<'a, 'r, R>(
+        _: &'r mut R,
         _: Endian,
-        (): Self::Args<'_>,
-    ) -> impl Future<Output = BinResult<Self>> + Send {
+        (): Self::Args<'a>,
+    ) -> impl Future<Output = BinResult<Self>> + Send + 'r
+    where
+        'a: 'r,
+        R: Read + Seek + Send,
+        Self: 'a,
+    {
         async move { Ok(()) }
     }
 }
 
 impl<T: BinRead + Send> BinRead for Box<T> {
-    type Args<'a> = T::Args<'a>;
+    type Args<'a>
+        = T::Args<'a>
+    where
+        T: 'a;
 
-    fn read_options<R: Read + Seek + Send>(
-        reader: &mut R,
+    fn read_options<'a, 'r, R>(
+        reader: &'r mut R,
         endian: Endian,
-        args: Self::Args<'_>,
-    ) -> impl Future<Output = BinResult<Self>> + Send {
+        args: Self::Args<'a>,
+    ) -> impl Future<Output = BinResult<Self>> + Send + 'r
+    where
+        'a: 'r,
+        R: Read + Seek + Send,
+        Self: 'a,
+    {
         async move { Ok(Box::new(T::read_options(reader, endian, args).await?)) }
     }
 }
 
 impl<T: BinRead + Send> BinRead for Option<T> {
-    type Args<'a> = T::Args<'a>;
+    type Args<'a>
+        = T::Args<'a>
+    where
+        T: 'a;
 
-    fn read_options<R: Read + Seek + Send>(
-        reader: &mut R,
+    fn read_options<'a, 'r, R>(
+        reader: &'r mut R,
         endian: Endian,
-        args: Self::Args<'_>,
-    ) -> impl Future<Output = BinResult<Self>> + Send {
+        args: Self::Args<'a>,
+    ) -> impl Future<Output = BinResult<Self>> + Send + 'r
+    where
+        'a: 'r,
+        R: Read + Seek + Send,
+        Self: 'a,
+    {
         async move {
             let exit: bool = reader.read_type(endian).await?;
             if exit {
@@ -200,23 +234,36 @@ impl<T: BinRead + Send> BinRead for Option<T> {
 }
 
 impl<T: Send> BinRead for core::marker::PhantomData<T> {
-    type Args<'a> = ();
+    type Args<'a>
+        = ()
+    where
+        T: 'a;
 
-    fn read_options<R: Read + Seek + Send>(
-        _: &mut R,
+    fn read_options<'a, 'r, R>(
+        _: &'r mut R,
         _: Endian,
-        (): Self::Args<'_>,
-    ) -> impl Future<Output = BinResult<Self>> + Send {
+        (): Self::Args<'a>,
+    ) -> impl Future<Output = BinResult<Self>> + Send + 'r
+    where
+        'a: 'r,
+        R: Read + Seek + Send,
+        Self: 'a,
+    {
         async move { Ok(core::marker::PhantomData) }
     }
 }
 impl BinRead for bool {
     type Args<'a> = ();
-    fn read_options<R: Read + Seek + Send>(
-        reader: &mut R,
+    fn read_options<'a, 'r, R>(
+        reader: &'r mut R,
         endian: Endian,
-        _args: Self::Args<'_>,
-    ) -> impl Future<Output = BinResult<Self>> + Send {
+        _args: Self::Args<'a>,
+    ) -> impl Future<Output = BinResult<Self>> + Send + 'r
+    where
+        'a: 'r,
+        R: Read + Seek + Send,
+        Self: 'a,
+    {
         async move {
             let value: u8 = reader.read_type_args(endian, ()).await?;
             Ok(value != 0)
@@ -236,17 +283,19 @@ mod tests {
     async fn test_read_slice() -> Result<()> {
         Ok(())
     }
-    trait Config: Sync + Send + Clone {
+    trait Config: Sync + Send + std::clone::Clone {
         fn size(&self) -> usize;
     }
     trait StreamDefault: Sized {
-        type Config;
-        fn config(&self) -> &Self::Config;
-        fn from_config(config: &Self::Config) -> impl Future<Output = BinResult<Self>> + Send;
+        type Config<'a>
+        where
+            Self: 'a;
+        fn config(&self) -> &Self::Config<'_>;
+        fn from_config(config: &Self::Config<'_>) -> impl Future<Output = BinResult<Self>> + Send;
         fn from_ref_config(
             _pos: u64,
             _size: u64,
-            config: &Self::Config,
+            config: &Self::Config<'_>,
         ) -> impl Future<Output = BinResult<(Self, bool)>> + Send {
             let fut = Self::from_config(config);
             async move {
@@ -258,7 +307,7 @@ mod tests {
     struct Dir<T>
     where
         T: Read + Write + Seek + StreamDefault,
-        T::Config: Config + 'static,
+        for<'a> T::Config<'a>: Config,
     {
         _marker: std::marker::PhantomData<T>,
         age: u32,
@@ -269,10 +318,10 @@ mod tests {
         config: MyConfig,
         inner: Cursor<Vec<u8>>,
     }
-    impl Default for MyData {
+    impl std::default::Default for MyData {
         fn default() -> Self {
             MyData {
-                config: Default::default(),
+                config: std::default::Default::default(),
                 inner: Cursor::new(vec![]),
             }
         }
@@ -287,13 +336,13 @@ mod tests {
         }
     }
     impl StreamDefault for MyData {
-        type Config = MyConfig;
+        type Config<'a> = MyConfig;
 
-        fn config(&self) -> &Self::Config {
+        fn config(&self) -> &Self::Config<'_> {
             &self.config
         }
 
-        fn from_config(config: &Self::Config) -> impl Future<Output = BinResult<Self>> + Send {
+        fn from_config(config: &Self::Config<'_>) -> impl Future<Output = BinResult<Self>> + Send {
             async move {
                 Ok(Self {
                     inner: Cursor::new(vec![]),
@@ -333,17 +382,21 @@ mod tests {
     impl<T> BinRead for Dir<T>
     where
         T: Read + Write + Seek + Send + StreamDefault,
-        T::Config: Config + 'static,
+        for<'a> T::Config<'a>: Config,
     {
-        type Args<'a> = (u16, &'a T::Config, &'a mut ReadBytesFun<'a>);
-
-        fn read_options<R: Read + Seek + Send>(
-            reader: &mut R,
-            endian: Endian,
-            args: Self::Args<'_>,
-        ) -> impl Future<Output = BinResult<Self>> + Send
+        type Args<'a>
+            = (u16, &'a T::Config<'a>, &'a mut ReadBytesFun<'a>)
         where
-            Self: Send,
+            Self: 'a;
+
+        fn read_options<'a, 'r, R: Read + Seek + Send>(
+            _reader: &'r mut R,
+            _endian: Endian,
+            args: Self::Args<'a>,
+        ) -> impl Future<Output = BinResult<Self>> + Send + 'r
+        where
+            'a: 'r,
+            Self: Send + 'a,
         {
             async move {
                 let (index, config, callback) = args;
@@ -374,7 +427,7 @@ mod tests {
     impl<T> Dir<T>
     where
         T: Read + Write + Seek + Send + Default + StreamDefault,
-        T::Config: Config + 'static,
+        for<'a> T::Config<'a>: Config,
     {
         pub fn copy<'a>(&'a mut self) -> Pin<Box<dyn Future<Output = ()> + Send + 'a>> {
             Box::pin(async move {

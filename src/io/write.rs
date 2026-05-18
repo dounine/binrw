@@ -8,7 +8,7 @@ pub trait Write {
     where
         Self: Send,
     {
-        async {
+        Box::pin(async move {
             let mut n = 0;
             while n < buf.len() {
                 let count = self.write(&buf[n..]).await?;
@@ -21,7 +21,7 @@ pub trait Write {
                 n += count;
             }
             Ok(())
-        }
+        })
     }
 }
 impl Write for &mut Cursor<Vec<u8>> {

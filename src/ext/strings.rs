@@ -2,26 +2,24 @@
 extern crate alloc;
 use crate::io::read::Read;
 use crate::io::seek::Seek;
-use crate::io::write::Write;
 use crate::{BinRead, BinResult, BinWrite, Endian};
 use core::fmt::{self};
 use std::string::{FromUtf8Error, FromUtf16Error};
 
 #[derive(Clone, Eq, PartialEq, Default)]
-pub struct NullString(
-    pub Vec<u8>,
-);
+pub struct NullString(pub Vec<u8>);
 
 impl BinRead for NullString {
     type Args<'a> = ();
 
-    fn read_options<R: Read + Seek + Send>(
-        reader: &mut R,
+    fn read_options<'a, 'r, R: Read + Seek + Send>(
+        reader: &'r mut R,
         endian: Endian,
-        _args: Self::Args<'_>,
-    ) -> impl Future<Output = BinResult<Self>> + Send
+        _args: Self::Args<'a>,
+    ) -> impl Future<Output = BinResult<Self>> + Send + 'r
     where
-        Self: Send,
+        'a: 'r,
+        Self: Send + 'a,
     {
         async move {
             let mut values = vec![];
@@ -39,14 +37,16 @@ impl BinRead for NullString {
 impl BinWrite for NullString {
     type Args<'a> = ();
 
-    fn write_options<W: Write + Seek + Send>(
-        &self,
-        writer: &mut W,
+    fn write_options<'a, 'w, W>(
+        &'a self,
+        writer: &'w mut W,
         _endian: Endian,
-        _args: Self::Args<'_>,
-    ) -> impl Future<Output = BinResult<()>> + Send
+        _args: Self::Args<'a>,
+    ) -> impl Future<Output = BinResult<()>> + Send + 'w
     where
-        Self: Sync,
+        'a: 'w,
+        W: crate::io::Write + Seek + Send,
+        Self: Sync + 'a,
     {
         async {
             writer.write_all(self.0.as_slice()).await?;
@@ -119,19 +119,25 @@ pub struct NullWideString(
 impl BinRead for NullWideString {
     type Args<'a> = ();
 
-    async fn read_options<R: Read + Seek + std::marker::Send>(
-        reader: &mut R,
+    fn read_options<'a, 'r, R: Read + Seek + Send>(
+        reader: &'r mut R,
         endian: Endian,
-        (): Self::Args<'_>,
-    ) -> BinResult<Self> {
-        let mut values = vec![];
+        _args: Self::Args<'a>,
+    ) -> impl Future<Output = BinResult<Self>> + Send + 'r
+    where
+        'a: 'r,
+        Self: Send + 'a,
+    {
+        async move {
+            let mut values = vec![];
 
-        loop {
-            let val = <u16>::read_options(reader, endian, ()).await?;
-            if val == 0 {
-                return Ok(Self(values));
+            loop {
+                let val = <u16>::read_options(reader, endian, ()).await?;
+                if val == 0 {
+                    return Ok(Self(values));
+                }
+                values.push(val);
             }
-            values.push(val);
         }
     }
 }
@@ -139,26 +145,32 @@ impl BinRead for NullWideString {
 impl BinWrite for NullWideString {
     type Args<'a> = ();
 
-    async fn write_options<W: Write + Seek + std::marker::Send>(
-        &self,
-        writer: &mut W,
+    fn write_options<'a, 'w, W>(
+        &'a self,
+        writer: &'w mut W,
         endian: Endian,
-        _: Self::Args<'_>,
-    ) -> BinResult<()> {
-        for &val in &self.0 {
-            let bytes = match endian {
-                Endian::Big => val.to_be_bytes(),
-                Endian::Little => val.to_le_bytes(),
+        _args: Self::Args<'a>,
+    ) -> impl Future<Output = BinResult<()>> + Send + 'w
+    where
+        'a: 'w,
+        W: crate::io::Write + Seek + Send,
+        Self: Sync + 'a,
+    {
+        async move {
+            for &val in &self.0 {
+                let bytes = match endian {
+                    Endian::Big => val.to_be_bytes(),
+                    Endian::Little => val.to_le_bytes(),
+                };
+                writer.write_all(&bytes).await?;
+            }
+            let null_bytes = match endian {
+                Endian::Big => 0u16.to_be_bytes(),
+                Endian::Little => 0u16.to_le_bytes(),
             };
-            writer.write_all(&bytes).await?;
+            writer.write_all(&null_bytes).await?;
+            Ok(())
         }
-        let null_bytes = match endian {
-            Endian::Big => 0u16.to_be_bytes(),
-            Endian::Little => 0u16.to_le_bytes(),
-        };
-        writer.write_all(&null_bytes).await?;
-
-        Ok(())
     }
 }
 
