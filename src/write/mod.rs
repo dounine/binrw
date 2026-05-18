@@ -134,7 +134,7 @@ pub trait BinWriterExt: Write + Seek + Sized + Send {
     where
         'v: 'a,
         T: BinWrite + Sync,
-        for<'b> T::Args<'b>: std::default::Default + Send,
+        T::Args<'a>: std::default::Default + Send,
     {
         self.write_type_args(value, endian, T::Args::default())
     }
@@ -146,7 +146,7 @@ pub trait BinWriterExt: Write + Seek + Sized + Send {
     where
         't: 'a,
         T: BinWrite + Sync,
-        for<'b> T::Args<'b>: std::default::Default + Send,
+        T::Args<'a>: std::default::Default + Send,
     {
         self.write_type(value, Endian::Big)
     }
@@ -157,7 +157,7 @@ pub trait BinWriterExt: Write + Seek + Sized + Send {
     where
         'v: 'a,
         T: BinWrite + Sync,
-        for<'b> T::Args<'b>: std::default::Default + Send,
+        T::Args<'a>: std::default::Default + Send,
     {
         self.write_type(value, Endian::Little)
     }
@@ -169,7 +169,7 @@ pub trait BinWriterExt: Write + Seek + Sized + Send {
     where
         'v: 'a,
         T: BinWrite + Sync,
-        for<'b> T::Args<'b>: std::default::Default + Send,
+        T::Args<'a>: std::default::Default + Send,
     {
         self.write_type(value, Endian::NATIVE)
     }
