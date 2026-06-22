@@ -55,7 +55,11 @@ pub trait Seek {
         }
     }
 }
-
+impl Seek for std::fs::File {
+    fn seek(&mut self, pos: SeekFrom) -> impl Future<Output = std::io::Result<u64>> + Send {
+        async move { std::io::Seek::seek(self, pos) }
+    }
+}
 impl Seek for Cursor<Vec<u8>> {
     async fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
         std::io::Seek::seek(self, pos)

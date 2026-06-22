@@ -3,7 +3,7 @@ use std::pin::Pin;
 use crate::io::read::Read;
 use crate::io::write::Write;
 
-pub fn copy< R, W>(
+pub fn copy<R, W>(
     reader: &mut R,
     writer: &mut W,
 ) -> impl Future<Output = std::io::Result<u64>> + Send
@@ -13,7 +13,7 @@ where
 {
     async move {
         let mut pos = 0;
-        let mut buf = [0u8; 8192];
+        let mut buf = [0u8; 1024 * 8];
         loop {
             let len = reader.read(&mut buf).await?;
             if len == 0 {
