@@ -30,10 +30,10 @@ impl Endian {
         match u16::from_le_bytes(bom) {
             BOM => Ok(Self::Little),
             REVERSE_BOM => Ok(Self::Big),
-            _ => Err(crate::Error::BadMagic {
-                pos: u64::MAX,
-                found: Box::new("Invalid UTF-16 BOM"),
-            }),
+            _ => Err(crate::Error::BadMagic(
+                u64::MAX,
+                "Invalid UTF-16 BOM".to_string(),
+            )),
         }
     }
 

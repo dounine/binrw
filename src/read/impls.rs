@@ -1,5 +1,6 @@
 use crate::io::read::Read;
 use crate::io::seek::Seek;
+use crate::error::Error;
 use crate::{BinRead, BinReaderExt};
 use crate::{BinResult, Endian};
 
@@ -20,7 +21,8 @@ macro_rules! read_impl {
                         let pos = reader.stream_position().await?;
                         let result = reader.read_exact(&mut val).await;
                         if let Err(e) = result {
-                           return Err(crate::private::restore_position(reader, pos).await(e));
+                            reader.set_position(pos).await?;
+                            return Err(Error::Io(e));
                         }
                         Ok(match endian {
                             Endian::Big => {
