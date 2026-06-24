@@ -1,10 +1,12 @@
 pub mod read;
 pub mod write;
 pub mod seek;
+pub mod buffer;
 mod copy;
 pub use read::Read;
 pub use write::Write;
 pub use seek::Seek;
+pub use buffer::{BufReader, BufWriter};
 pub use copy::copy;
 pub use copy::copy_callback;
 pub use copy::ReadBytesCallback;

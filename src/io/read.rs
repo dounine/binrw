@@ -63,6 +63,12 @@ pub trait ReadExt {
     {
         Take { inner: self, limit }
     }
+    // fn take_mut(&mut self, limit: u64) -> Take<&mut Self>
+    // where
+    //     Self: Sized,
+    // {
+    //     Take { inner: self, limit }
+    // }
 
     // 不消耗 self 所有权，而是借用 self 的 take_ref (类似于 std::io::Read::by_ref().take())
     // 这里的命名为了避免冲突，使用 take_borrowed 或者类似的
@@ -72,8 +78,8 @@ pub trait ReadExt {
 impl<R: Read> ReadExt for R {}
 
 pub struct Take<R> {
-    inner: R,
-    limit: u64,
+    pub inner: R,
+    pub limit: u64,
 }
 // impl Read for Take<Arc<async_lock::Mutex<Cursor<Vec<u8>>>>> {
 //     fn read(&mut self, buf: &mut [u8]) -> impl Future<Output=std::io::Result<usize>> + Send {
@@ -111,10 +117,16 @@ impl<R: Read + Send> Read for Take<R> {
         self.inner.flush().await
     }
 }
+
 #[cfg(test)]
-mod take_tests {
+mod tests {
+    use crate::io::buffer::BufReader;
+    use crate::io::read::Read;
     use crate::io::read::ReadExt;
+    use crate::io::read::Take;
+    use crate::io::seek::Seek;
     use std::io::Cursor;
+    use std::io::SeekFrom;
 
     #[tokio::test]
     async fn test_take() {
@@ -124,6 +136,71 @@ mod take_tests {
         let mut new_data = Cursor::new(Vec::new());
         crate::io::copy(&mut data, &mut new_data).await.unwrap();
         assert_eq!(new_data.into_inner(), vec![4, 5, 6]);
+    }
+
+    #[tokio::test]
+    async fn test_take_with_mut_ref() {
+        let mut data: Cursor<Vec<u8>> = Cursor::new(vec![1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
+
+        // 使用 Take<&mut R>，不消耗 data 的所有权
+        let mut take = Take {
+            inner: &mut data,
+            limit: 3,
+        };
+
+        let mut new_data = Cursor::new(Vec::new());
+        crate::io::copy(&mut take, &mut new_data).await.unwrap();
+        assert_eq!(new_data.into_inner(), vec![1, 2, 3]);
+
+        // data 仍然可用，可以继续使用
+        let mut buf = [0u8; 2];
+        data.read_exact(&mut buf).await.unwrap();
+        assert_eq!(buf, [4, 5]);
+    }
+
+    #[tokio::test]
+    async fn test_buf_reader_seek() {
+        let mut data = Cursor::new(vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
+        let mut buf_reader = BufReader::with_capacity(4, data);
+
+        // 测试读取填充缓冲区
+        let mut buf = [0u8; 2];
+        buf_reader.read_exact(&mut buf).await.unwrap();
+        assert_eq!(buf, [0, 1]);
+
+        // 测试 SeekFrom::Current(0) 获取当前位置
+        let pos = buf_reader.stream_position().await.unwrap();
+        assert_eq!(pos, 2);
+
+        // 测试 SeekFrom::Start 在缓冲区内
+        buf_reader.seek(SeekFrom::Start(1)).await.unwrap();
+        let pos = buf_reader.stream_position().await.unwrap();
+        assert_eq!(pos, 1);
+
+        // 测试读取
+        let mut buf = [0u8; 1];
+        buf_reader.read_exact(&mut buf).await.unwrap();
+        assert_eq!(buf, [1]);
+
+        // 测试 SeekFrom::Current
+        buf_reader.seek(SeekFrom::Current(2)).await.unwrap();
+        let pos = buf_reader.stream_position().await.unwrap();
+        assert_eq!(pos, 4);
+
+        // 测试读取
+        let mut buf = [0u8; 1];
+        buf_reader.read_exact(&mut buf).await.unwrap();
+        assert_eq!(buf, [4]);
+
+        // 测试 SeekFrom::End
+        buf_reader.seek(SeekFrom::End(-2)).await.unwrap();
+        let pos = buf_reader.stream_position().await.unwrap();
+        assert_eq!(pos, 8);
+
+        // 测试读取
+        let mut buf = [0u8; 2];
+        buf_reader.read_exact(&mut buf).await.unwrap();
+        assert_eq!(buf, [8, 9]);
     }
 }
 // 这里的关键是为 &mut R 实现 Read，这样 R 就可以被借用了

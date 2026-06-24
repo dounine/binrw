@@ -1,4 +1,4 @@
-use crate::io::read::Read;
+use crate::io::read::{Read};
 use crate::io::seek::Seek;
 use crate::error::Error;
 use crate::{BinRead, BinReaderExt};

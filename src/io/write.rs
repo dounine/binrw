@@ -24,16 +24,10 @@ pub trait Write {
         })
     }
 }
-impl Write for &mut Cursor<Vec<u8>> {
-    fn write(&mut self, buf: &[u8]) -> impl Future<Output = std::io::Result<usize>> + Send {
-        async move { std::io::Write::write(self, buf) }
-    }
-
-    fn flush(&mut self) -> impl Future<Output = std::io::Result<()>> + Send {
-        async { std::io::Write::flush(self) }
-    }
-}
-impl Write for Cursor<Vec<u8>> {
+impl<T: AsMut<[u8]> + AsRef<[u8]> + Send> Write for Cursor<T>
+where
+    Cursor<T>: std::io::Write,
+{
     fn write(&mut self, buf: &[u8]) -> impl Future<Output = std::io::Result<usize>> + Send {
         async { std::io::Write::write(self, buf) }
     }
@@ -67,18 +61,30 @@ impl Write for [u8] {
         async { Ok(()) }
     }
 }
-impl Write for Vec<u8> {
+// impl Write for Vec<u8> {
+//     fn write(&mut self, buf: &[u8]) -> impl Future<Output = std::io::Result<usize>> + Send {
+//         async move {
+//             self.copy_from_slice(buf);
+//             Ok(buf.len())
+//         }
+//     }
+
+//     fn flush(&mut self) -> impl Future<Output = std::io::Result<()>> + Send {
+//         async move { Ok(()) }
+//     }
+// }
+
+// 为 &mut W 实现 Write trait，这样任何实现了 Write 的类型都可以通过引用使用
+impl<W: Write + ?Sized + Send> Write for &mut W {
     fn write(&mut self, buf: &[u8]) -> impl Future<Output = std::io::Result<usize>> + Send {
-        async move {
-            self.copy_from_slice(buf);
-            Ok(buf.len())
-        }
+        (**self).write(buf)
     }
 
     fn flush(&mut self) -> impl Future<Output = std::io::Result<()>> + Send {
-        async move { Ok(()) }
+        (**self).flush()
     }
 }
+
 #[cfg(test)]
 mod tests {
     use anyhow::Result;

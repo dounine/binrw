@@ -60,8 +60,18 @@ impl Seek for std::fs::File {
         async move { std::io::Seek::seek(self, pos) }
     }
 }
-impl Seek for Cursor<Vec<u8>> {
+
+impl<T: AsRef<[u8]> + Send> Seek for Cursor<T>
+where
+    Cursor<T>: std::io::Seek,
+{
     async fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
         std::io::Seek::seek(self, pos)
+    }
+}
+
+impl<R: Seek + ?Sized + Send> Seek for &mut R {
+    async fn seek(&mut self, pos: SeekFrom) -> std::io::Result<u64> {
+        (**self).seek(pos).await
     }
 }
