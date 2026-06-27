@@ -276,17 +276,17 @@ impl ReadAt for File {
         #[cfg(unix)]
         {
             use std::os::unix::fs::FileExt;
-            FileExt::read_at(self, buf, offset)
+            return FileExt::read_at(self, buf, offset);
         }
         #[cfg(target_os = "wasi")]
         {
             use std::os::wasi::fs::FileExt;
-            FileExt::read_at(self, buf, offset)
+            return FileExt::read_at(self, buf, offset);
         }
         #[cfg(windows)]
         {
             use std::os::windows::fs::FileExt;
-            FileExt::seek_read(self, buf, offset)
+            return FileExt::seek_read(self, buf, offset);
         }
         #[cfg(not(any(unix, target_os = "wasi", windows)))]
         {
