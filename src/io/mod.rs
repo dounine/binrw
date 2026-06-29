@@ -3,6 +3,7 @@ pub mod write;
 pub mod seek;
 pub mod buffer;
 pub mod cb;
+pub mod bytes;
 mod copy;
 mod stack_buffer;
 pub use read::Read;

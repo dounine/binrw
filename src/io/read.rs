@@ -81,26 +81,7 @@ pub struct Take<R> {
     pub inner: R,
     pub limit: u64,
 }
-// impl Read for Take<Arc<async_lock::Mutex<Cursor<Vec<u8>>>>> {
-//     fn read(&mut self, buf: &mut [u8]) -> impl Future<Output=std::io::Result<usize>> + Send {
-//         async move {
-//             if self.limit == 0 {
-//                 return Ok(0);
-//             }
-//             let max = std::cmp::min(buf.len() as u64, self.limit) as usize;
-//             let mut inner = self.inner.lock().await;
-//             let n = inner.read(&mut buf[..max]).await?;
-//             self.limit -= n as u64;
-//             Ok(n)
-//         }
-//     }
-//
-//     fn flush(&mut self) -> impl Future<Output=std::io::Result<()>> + Send {
-//         async move{
-//             Ok(())
-//         }
-//     }
-// }
+
 impl<R: Read + Send> Read for Take<R> {
     async fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if self.limit == 0 {

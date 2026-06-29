@@ -1,5 +1,6 @@
 use crate::BinResult;
 use crate::error::Error;
+use crate::io::bytes::BytesCallback;
 use crate::io::read::Read;
 use crate::io::write::Write;
 use std::pin::Pin;
@@ -28,14 +29,15 @@ where
 }
 pub type ReadBytesCallback<'a> =
     dyn FnMut(u64) -> Pin<Box<dyn Future<Output = BinResult<()>> + Send>> + Send + 'a;
-pub async fn copy_callback<'f, R: ?Sized, W: ?Sized>(
+pub async fn copy_callback<'f, R: ?Sized, W: ?Sized, C>(
     reader: &mut R,
     writer: &mut W,
-    callback: &mut ReadBytesCallback<'f>,
+    callback: &mut C,
 ) -> Result<u64, Error>
 where
     R: Read + Send,
     W: Write + Send,
+    C: BytesCallback + Send,
 {
     let mut pos = 0;
     let mut buf = [0u8; 8192];
@@ -45,7 +47,7 @@ where
             break;
         }
         writer.write_all(&buf[..len]).await?;
-        callback(len as u64).await?;
+        callback.call(len as u64).await?;
         pos += len as u64;
     }
     Ok(pos)

@@ -1,9 +1,17 @@
+use binrw::io::bytes::{
+    BytesCallback, BytesCallbackFn, BytesToTotalAdapter, TotalBytesCallback, TotalBytesCallbackFn,
+    make_callback,
+};
 use binrw::io::cb::{ReadCallback, WriteCallback};
 use binrw::io::{BufReader, BufWriter};
 use binrw::io::{Read, Seek, Write};
 use binrw::{BinRead, BinReaderExt, BinResult, BinWrite, BinWriterExt, Endian, Error};
+use miniz_oxide::inflate::stream::decompress_stream;
+use std::fs::OpenOptions;
 use std::io::Cursor;
 use std::pin::Pin;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 pub struct Data {
     age: u32,
@@ -126,14 +134,17 @@ pub fn create_adapter<'a, CB>(
     buffered: &'a mut u64,
     sum: &'a mut u64,
     mut cb: CB,
-) -> impl FnMut(u64) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> + Send + 'a
+) -> BytesCallbackFn<
+    impl FnMut(u64) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> + Send + 'a,
+>
 where
     CB: FnMut(u64, u64) -> Pin<Box<dyn Future<Output = Result<(), Error>> + Send>> + Send + 'a,
 {
-    move |bytes| {
+    BytesCallbackFn::new(move |bytes| {
         if bytes == 0 {
             if *buffered == 0 {
-                return Box::pin(async { Ok(()) });
+                return Box::pin(async { Ok(()) })
+                    as Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>;
             }
             let result = cb(total, *sum);
             *buffered = 0;
@@ -145,9 +156,9 @@ where
             *buffered = 0;
             cb(total, *sum)
         } else {
-            Box::pin(async { Ok(()) })
+            Box::pin(async { Ok(()) }) as Pin<Box<dyn Future<Output = Result<(), Error>> + Send>>
         }
-    }
+    })
 }
 pub struct UU {}
 impl UU {
@@ -163,7 +174,7 @@ impl UU {
             let writer = BufWriter::with_capacity(32 * 1024, writer);
             let mut buffered = 0;
             let mut sum = 0;
-            let callback = create_adapter(5, &mut buffered,&mut sum,callback);
+            let callback = create_adapter(5, &mut buffered, &mut sum, callback);
             let mut cb = WriteCallback::new(writer, callback);
             let result = {
                 async move {
@@ -175,6 +186,65 @@ impl UU {
             Ok(())
         }
     }
+}
+pub fn decompressed_with_writer<'a, W>(
+    writer: &'a mut W,
+) -> impl Future<Output = BinResult<()>> + Send
+where
+    W: Write + Seek + Send,
+{
+    async move { Ok(()) }
+}
+pub fn unzip2<'a, F>(callback: &'a mut F) -> impl Future<Output = BinResult<()>> + Send
+where
+    F: TotalBytesCallback + Send,
+{
+    async move {
+        let total_bytes = 1000;
+        let mut callback = BytesToTotalAdapter::new(total_bytes, callback);
+
+        for _ in 0..3 {
+            decompress_with_files(&mut callback).await?;
+        }
+        Ok(())
+    }
+}
+pub fn unzip<'a, F>(mut callback: F) -> impl Future<Output = BinResult<()>> + Send
+where
+    F: TotalBytesCallback + Send,
+{
+    async move {
+        let mut sum = 0;
+        let mut buffered = 0;
+        let total_bytes = 1000;
+
+        // 在循环外面只创建一次 BytesToTotalAdapter
+        let mut callback = BytesToTotalAdapter::new(total_bytes, &mut callback);
+
+        for _ in 0..3 {
+            let file = OpenOptions::new().read(true).write(true).open("")?;
+            let file = BufWriter::with_capacity(1024 * 1024, file);
+            let mut output = WriteCallback::new(file, callback);
+            decompressed_with_writer(&mut output).await?;
+            output.flush().await?;
+
+            // 使用 into_parts() 重新获取 callback 实例
+            let (_file, cb) = output.into_parts();
+            callback = cb;
+        }
+        Ok(())
+    }
+}
+pub async fn decompress_with_files<'a, F>(callback: &'a mut F) -> BinResult<()>
+where
+    F: BytesCallback + Send,
+{
+    let mut data = Cursor::new(vec![1_u8, 2_u8, 3_u8, 4_u8, 5_u8]);
+    let mut new_data = Cursor::new(Vec::new());
+    let mut reader = ReadCallback::new(data, callback);
+    decompress_stream(&mut reader, &mut new_data).await.unwrap();
+    // .map_err(|e| Error::Err(Box::new(e)))?;
+    Ok(())
 }
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -206,6 +276,15 @@ async fn main() -> anyhow::Result<()> {
         }
         .await
     };
+    unzip(TotalBytesCallbackFn::new(
+        |bytes, total| -> Pin<Box<dyn Future<Output = BinResult<()>> + Send>> {
+            Box::pin(async move { Ok(()) })
+        },
+    ))
+    .await
+    .unwrap();
+    // let callback = &mut make_callback(|bytes| Box::pin(async move { Ok(()) }));
+    // sign_node(10, callback).await?;
     // let pos = cb.position();
     // assert!(pos == 1);
     // dbg!(pos);
@@ -222,5 +301,73 @@ async fn main() -> anyhow::Result<()> {
     // let output = writer.into_inner_flush().await?;
     // dbg!(output.into_inner());
 
+    // let mut hash_writer = HashWriter::new(new_data);
+
     Ok(())
+}
+pub fn sign_node<'a, C>(
+    deep: usize,
+    callback: SharedBytesCallback<C>,
+) -> Pin<Box<dyn Future<Output = BinResult<()>> + Send + 'a>>
+where
+    C: BytesCallback + Send,
+{
+    Box::pin(async move {
+        callback.call(10).await?;
+        let (_, results) = unsafe {
+            async_scoped::TokioScope::scope_and_collect(|scope| {
+                for i in 0..deep {
+                    scope.spawn(async move {
+                        // let mut callback =
+                        //     &mut BytesCallbackFn::new(|bytes| Box::pin(async move { Ok(()) }));
+                        let callback = callback.clone();
+                        sign_node(i - 1, callback).await
+                    });
+                }
+            })
+        }
+        .await;
+        for result in results {
+            result.unwrap().unwrap();
+        }
+        Ok(())
+    })
+}
+
+pub struct SharedBytesCallback<C>(Arc<Mutex<C>>);
+
+impl<C> SharedBytesCallback<C> {
+    pub fn new(inner: C) -> Self {
+        Self(Arc::new(Mutex::new(inner)))
+    }
+}
+impl<C> Clone for SharedBytesCallback<C>
+where
+    for<'a> C: BytesCallback + Send + 'a,
+    for<'a> C::Future<'a>: Send,
+{
+    fn clone(&self) -> Self {
+        Self(self.0.clone())
+    }
+}
+impl<C> BytesCallback for SharedBytesCallback<C>
+where
+    for<'a> C: BytesCallback + Send + 'a,
+    for<'a> C::Future<'a>: Send,
+{
+    type Future<'a>
+        = Pin<Box<dyn Future<Output = BinResult<()>> + Send + 'a>>
+    where
+        Self: 'a;
+
+    fn call<'a>(&mut self, bytes: u64) -> Self::Future<'a>
+    where
+        Self: 'a,
+    {
+        let inner = Arc::clone(&self.0);
+        Box::pin(async move {
+            let mut callback = inner.lock().await;
+            callback.call(bytes).await
+        })
+    }
 }
